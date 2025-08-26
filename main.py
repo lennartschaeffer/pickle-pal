@@ -1,6 +1,14 @@
+from xml.parsers.expat import model
 import cv2
 from utils import read_video, save_video
 from trackers import PlayerTracker, BallTracker, CourtTracker
+from torchvision import datasets, transforms
+from torch.utils.data import DataLoader, random_split
+from PIL import Image
+import torch
+import torch.nn as nn
+import torchvision.models as models
+
 
 def main():
     # read video
@@ -30,12 +38,62 @@ def main():
     print(ball_shot_frames)
     frames_for_hit = 20
     curr_shot = None
+    
+    # technique classification
+    transform = transforms.Compose([
+    transforms.Resize((224, 224)),  # resize for ResNet
+    transforms.ToTensor(),
+    transforms.Normalize([0.485, 0.456, 0.406],
+                         [0.229, 0.224, 0.225])
+    ])
+    
+
+    # Load the image
+    model = models.resnet18(weights=None)
+    num_features = model.fc.in_features
+    model.fc = nn.Linear(num_features, 4)  # 4 classes: forehand/backhand/ready_position/serve
+
+    model.load_state_dict(torch.load("models/resnet18_technique.pth", map_location=torch.device('cpu')))
+    model.eval()  # set to inference mode
+    
+    transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406],
+                            [0.229, 0.224, 0.225])
+    ])
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    
+    currPrediction = None
+
     # draw frame number in top left corner
     for i, frame in enumerate(output_video_frames):
         if i in ball_shot_frames:
             curr_shot = i
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            # Convert NumPy array to PIL Image
+            image = Image.fromarray(frame_rgb)
+            # Apply transform, convert image to PyTorch tensor
+            image_tensor = transform(image).unsqueeze(0).to(device)  # type: ignore
+
+            # Inference
+            model.eval()
+            with torch.no_grad():
+                outputs = model(image_tensor)
+                _, pred = torch.max(outputs, 1)
+
+            print("Predicted class index:", pred.item())
+            classes = ['backhand', 'forehand', 'ready_position', 'serve']
+            print("Predicted label:", classes[int(pred.item())])
+            currPrediction = classes[int(pred.item())]
+
+            # run it through the technique classification model
         if curr_shot is not None and i < curr_shot + frames_for_hit:
             cv2.putText(frame, "Ball Hit!", (10, 300), cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 0, 255), 5)
+            if currPrediction is not None:
+                cv2.putText(frame, f"Technique: {currPrediction}", (10, 500), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 0, 0), 5)
+            
         cv2.putText(frame, f"Frame: {i}", (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 5)
 
     print(f"Video FPS: {fps}")
