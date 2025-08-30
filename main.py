@@ -47,14 +47,14 @@ def main():
     
     # draw frame number in top left corner
     for i, frame in enumerate(output_video_frames):
-        result = pose_classifier.classify_pose(frame)
-        cv2.putText(frame, f"Current Technique: {result}", (10, 250), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        result, _ = pose_classifier.classify_pose(frame)
+        cv2.putText(frame, f"P1 Current Technique: {result}", (10, 250), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
         if i in ball_shot_frames:
             curr_shot = i
         if curr_shot is not None and i < curr_shot + frames_for_hit:
-            cv2.putText(frame, "Ball Hit!", (10, 300), cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 0, 255), 5)
+            cv2.putText(frame, "Ball Hit!", (10, 380), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
             
-        cv2.putText(frame, f"Frame: {i}", (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 5)
+        cv2.putText(frame, f"Frame: {i}", (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
 
     print(f"Video FPS: {fps}")
     save_video(output_video_frames, "output_videos/processed_vid.avi",fps)
