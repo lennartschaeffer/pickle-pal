@@ -6,3 +6,5 @@ output_videos/
 models/
 input_videos/
 .DS_Store
+venv311/
+tes.py
