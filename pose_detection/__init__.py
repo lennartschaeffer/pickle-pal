@@ -1,1 +1,1 @@
-# from .pose_estimator import PoseEstimator
+from .pose_classifier import PoseClassifier, PoseClassifierModel
