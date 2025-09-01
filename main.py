@@ -1,13 +1,6 @@
-from xml.parsers.expat import model
 import cv2
 from utils import read_video, save_video
 from trackers import PlayerTracker, BallTracker, CourtTracker
-from torchvision import datasets, transforms
-from torch.utils.data import DataLoader, random_split
-from PIL import Image
-import torch
-import torch.nn as nn
-import torchvision.models as models
 from pose_detection import PoseClassifier
 
 def main():
@@ -35,11 +28,14 @@ def main():
 
     # detect ball shots
     ball_shot_frames = ball_tracker.get_ball_shot_frames(ball_detections)
-    frames_for_hit = 20
+    frames_for_hit = 50
     curr_shot = None
+    ball__hit_count = 0
+    ralley_over_frames = 100
+    frame_ball_last_hit = None
+    fh_bh_counts = {}
     
     # pose classfier
-    
     pose_classifier = PoseClassifier(
         pose_model_path='models/pose_landmarker_lite.task',
         classifier_path='models/new_pose_classifier.pth'
@@ -47,16 +43,34 @@ def main():
     
     # draw frame number in top left corner
     for i, frame in enumerate(output_video_frames):
-        result, _ = pose_classifier.classify_pose(frame)
-        cv2.putText(frame, f"P1 Current Technique: {result}", (10, 250), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
         if i in ball_shot_frames:
             curr_shot = i
-        if curr_shot is not None and i < curr_shot + frames_for_hit:
-            cv2.putText(frame, "Ball Hit!", (10, 380), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-            
+            ball__hit_count += 1
+            frame_ball_last_hit = i
+        if curr_shot is not None:
+            if i < curr_shot + frames_for_hit:
+                cv2.putText(frame, "Ball Hit!", (10, 380), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                result, _ = pose_classifier.classify_pose(frame)
+                fh_bh_counts[result] = fh_bh_counts.get(result, 0) + 1
+                max_technique = ("None", 0)
+                for t in fh_bh_counts:
+                    if fh_bh_counts[t] > max_technique[1]:
+                        max_technique = (t, fh_bh_counts[t])
+                cv2.putText(frame, f"P1 Current Technique: {max_technique[0]}", (10, 250), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            elif i == curr_shot + frames_for_hit:
+                print(fh_bh_counts)
+                final_guess = max_technique[0]
+                cv2.putText(frame, f"P1 Final Technique: {final_guess}", (10, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+            else:
+                fh_bh_counts = {}
+        if frame_ball_last_hit is not None and i > frame_ball_last_hit + ralley_over_frames:
+            curr_shot = None
+            frame_ball_last_hit = None
+            cv2.putText(frame, f"Rally Over! Total Hits: {ball__hit_count}", (10, 450), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+
+        cv2.putText(frame, f"Total Hits: {ball__hit_count}", (10, 500), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
         cv2.putText(frame, f"Frame: {i}", (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
 
-    print(f"Video FPS: {fps}")
     save_video(output_video_frames, "output_videos/processed_vid.avi",fps)
 
 if __name__ == "__main__":
